@@ -3,46 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reaction Time Experiment & Analytics</title>
+    <title>Reaction Time Experiment</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body, html {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f8f9fa; color: #333;
-        }
-
-        /* Screen 1 & 3 Containers */
-        .full-screen {
-            display: flex; flex-direction: column; align-items: center;
-            justify-content: center; height: 100vh; text-align: center;
-        }
-
-        .card {
-            background: white; padding: 2.5rem; border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 90%; max-width: 600px;
-        }
-
-        input {
-            padding: 12px; font-size: 1rem; border: 2px solid #dee2e6;
-            border-radius: 8px; margin-bottom: 1.5rem; width: 100%;
-            box-sizing: border-box; outline: none;
-        }
-
-        button {
-            padding: 12px 24px; font-size: 1rem; background-color: #007bff;
-            color: white; border: none; border-radius: 8px; cursor: pointer;
-            font-weight: 600; width: 100%;
-        }
-
-        /* Screen 2: Task Canvas */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; color: #333; }
+        .full-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
+        .card { background: white; padding: 2.5rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 90%; max-width: 600px; }
+        input { padding: 12px; font-size: 1rem; border: 2px solid #dee2e6; border-radius: 8px; margin-bottom: 1.5rem; width: 100%; box-sizing: border-box; outline: none; }
+        button { padding: 12px 24px; font-size: 1rem; background-color: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; width: 100%; }
+        button:hover { background-color: #0056b3; }
         #task-canvas { display: none; background-color: #ffffff; cursor: crosshair; }
-
-        /* Chart Styling */
         #results-screen { display: none; overflow-y: auto; padding: 20px 0; }
         .chart-container { position: relative; margin: auto; height: 40vh; width: 100%; }
-        .stats-summary { margin-bottom: 20px; font-size: 1.2rem; }
-        .avg-highlight { color: #d9534f; font-weight: bold; }
+        .avg-highlight { color: #d9534f; font-weight: bold; font-size: 1.4rem; }
     </style>
 </head>
 <body>
@@ -50,7 +23,7 @@
     <div id="welcome-screen" class="full-screen">
         <div class="card">
             <h1>Reaction Task</h1>
-            <p>Click the circles as fast as possible (10 trials).<br>Your results will be compared to our database at the end.</p>
+            <p>Click the 10 red circles as fast as possible.</p>
             <input type="text" id="participant-id" placeholder="Enter Participant ID (Optional)">
             <button onclick="initTask()">Start Task</button>
         </div>
@@ -60,8 +33,8 @@
 
     <div id="results-screen" class="full-screen">
         <div class="card">
-            <h2>Experiment Complete</h2>
-            <div id="stats-summary" class="stats-summary">Processing your data...</div>
+            <h2>Results Analysis</h2>
+            <div id="stats-summary" style="margin-bottom: 20px;">Fetching comparison data...</div>
             <div class="chart-container">
                 <canvas id="rtHistogram"></canvas>
             </div>
@@ -104,13 +77,12 @@
             }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             setTimeout(() => {
-                const margin = circle.r + 30;
+                const margin = circle.r + 50;
                 circle.x = Math.random() * (canvas.width - margin * 2) + margin;
                 circle.y = Math.random() * (canvas.height - margin * 2) + margin;
-
                 ctx.beginPath();
                 ctx.arc(circle.x, circle.y, circle.r, 0, Math.PI * 2);
-                ctx.fillStyle = "#007bff";
+                ctx.fillStyle = "#ff4757";
                 ctx.fill();
                 ctx.closePath();
                 startTime = performance.now();
@@ -126,7 +98,6 @@
                 sessionRTs.push(rt);
                 currentTrial++;
                 
-                // Immediate individual trial post
                 fetch(WEB_APP_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -136,7 +107,6 @@
                         Reaction_Time: rt
                     })
                 });
-
                 spawnCircle();
             }
         });
@@ -144,49 +114,46 @@
         async function finishExperiment() {
             canvas.style.display = 'none';
             document.getElementById('results-screen').style.display = 'flex';
-
-            // 1. Calculate user average
             const userAvg = sessionRTs.reduce((a, b) => a + b, 0) / sessionRTs.length;
 
             try {
-                // 2. Get Historical Data
                 const response = await fetch(WEB_APP_URL);
+                if (!response.ok) throw new Error('Fetch failed');
                 const history = await response.json();
 
                 document.getElementById('stats-summary').innerHTML = 
-                    `Your Average RT: <span class="avg-highlight">${userAvg.toFixed(1)} ms</span><br>` +
-                    `<small>Compared to ${history.length} global trials</small>`;
+                    `Your Average: <span class="avg-highlight">${userAvg.toFixed(1)} ms</span><br>` +
+                    `<small>Compared against ${history.length} global trials.</small>`;
 
-                // 3. Plot Histogram
-                generateHistogram(history, userAvg);
+                renderChart(history, userAvg);
             } catch (e) {
-                document.getElementById('stats-summary').innerText = "Error loading comparison data.";
-                console.error(e);
+                document.getElementById('stats-summary').innerHTML = "No historical data yet. You're the first!<br>" + 
+                `Your Average: <span class="avg-highlight">${userAvg.toFixed(1)} ms</span>`;
+                renderChart(sessionRTs, userAvg); // Fallback to current session
             }
         }
 
-        function generateHistogram(data, userAvg) {
+        function renderChart(data, userAvg) {
             const ctxChart = document.getElementById('rtHistogram').getContext('2d');
-            
-            // Bin the data for a histogram effect (50ms buckets)
             const binSize = 50;
             const bins = {};
+            
             data.forEach(val => {
-                const bin = Math.floor(val / binSize) * binSize;
-                bins[bin] = (bins[bin] || 0) + 1;
+                const b = Math.floor(val / binSize) * binSize;
+                bins[b] = (bins[b] || 0) + 1;
             });
 
             const labels = Object.keys(bins).sort((a, b) => a - b);
-            const counts = labels.map(label => bins[label]);
+            const counts = labels.map(l => bins[l]);
 
             new Chart(ctxChart, {
                 type: 'bar',
                 data: {
-                    labels: labels.map(l => `${l}ms`),
+                    labels: labels.map(l => l + "ms"),
                     datasets: [{
-                        label: 'Frequency of All Users',
+                        label: 'Frequency',
                         data: counts,
-                        backgroundColor: 'rgba(0, 123, 255, 0.5)',
+                        backgroundColor: 'rgba(0, 123, 255, 0.4)',
                         borderColor: '#007bff',
                         borderWidth: 1,
                         barPercentage: 1,
@@ -196,41 +163,28 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, title: { display: true, text: 'Number of Trials' } },
-                        x: { title: { display: true, text: 'Reaction Time (ms)' } }
-                    },
-                    plugins: {
-                        // Custom plugin to draw the vertical line for user average
-                        annotation: {
-                            // Annotation plugin would be cleaner, but we can use a basic line hack
-                        }
-                    }
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
                 },
                 plugins: [{
                     afterDraw: chart => {
                         const {ctx, scales: {x, y}} = chart;
-                        // Find the x-coordinate for the user's average
                         const xPixel = x.getPixelForValue(Math.floor(userAvg / binSize) * binSize + "ms");
-                        
-                        ctx.save();
-                        ctx.strokeStyle = '#d9534f';
-                        ctx.lineWidth = 3;
-                        ctx.setLineDash([5, 5]);
-                        ctx.beginPath();
-                        ctx.moveTo(xPixel, y.top);
-                        ctx.lineTo(xPixel, y.bottom);
-                        ctx.stroke();
-                        
-                        ctx.fillStyle = '#d9534f';
-                        ctx.font = 'bold 12px Arial';
-                        ctx.fillText('YOU', xPixel - 12, y.top - 5);
-                        ctx.restore();
+                        if (xPixel) {
+                            ctx.save();
+                            ctx.strokeStyle = '#d9534f';
+                            ctx.lineWidth = 3;
+                            ctx.setLineDash([5, 5]);
+                            ctx.beginPath();
+                            ctx.moveTo(xPixel, y.top);
+                            ctx.lineTo(xPixel, y.bottom);
+                            ctx.stroke();
+                            ctx.restore();
+                        }
                     }
                 }]
             });
         }
-
         window.addEventListener('resize', resizeCanvas);
     </script>
 </body>
